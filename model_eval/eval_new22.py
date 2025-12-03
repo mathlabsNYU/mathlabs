@@ -60,7 +60,7 @@ IMAGE_DIR = "/Users/lucasyao/Documents/GitHub/mathlabs/dataset/images"
 # List A: The OpenRouter Models
 OPENROUTER_MODELS = [
     "mistralai/mistral-small-3.1-24b-instruct:free",
-    "qwen/qwen2.5-vl-32b-instruct:free",
+    "x-ai/grok-4.1-fast:free",
     "google/gemini-2.0-flash-exp:free",
     "nvidia/nemotron-nano-12b-v2-vl:free"
 ]
