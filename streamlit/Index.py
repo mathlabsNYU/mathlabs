@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+import streamlit as st
 
 # -------------------------------------------------------------
 # Global Streamlit Config (must appear once)
