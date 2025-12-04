@@ -146,7 +146,6 @@ question_docs_map = {normalize_pid(q["problem_id"]): q for q in question_docs}
 # ---------------------------------------------------------------------
 st.sidebar.header("Question Selection")
 
-pid_keyword = st.sidebar.text_input("Search by Problem ID keyword", value="")
 topic_filter = st.sidebar.multiselect(
     "Filter by Topic",
     options=sorted({
