@@ -153,7 +153,7 @@ def tab_model_perf(df):
         x=model_perf["Accuracy"],
         y=model_perf["model_short"],
         orientation="h",
-        marker=dict(color=model_perf["Accuracy"], colorscale="Blues"),
+        marker=dict(color="rgba(47,111,183,0.6)"),
         error_x=dict(
             type="data",
             array=model_perf["ci"],
@@ -294,10 +294,7 @@ def tab_time(df):
                 visible=True
             ),
             marker=dict(
-                color=stats["mean_time"],
-                colorscale="Blues",
-                showscale=True,
-                colorbar=dict(title="Mean Time (ms)")
+                color="rgba(47,111,183,0.6)"
             ),
         )
     )
@@ -394,9 +391,12 @@ def tab_topic(df, questions):
         y="Topic",
         orientation="h",
         color="Accuracy",
-        color_continuous_scale="Blues",
-        title="Accuracy by Topic (min 3 questions)"
+        title="Accuracy by Topic (min 3 questions)",
+        color_discrete_sequence=["#4C78A8"]
     )
+
+    fig_acc.update_traces(marker_color="#4C78A8", showlegend=False)
+
 
     fig_acc.update_layout(
         height=500,
@@ -413,10 +413,11 @@ def tab_topic(df, questions):
         x="Avg Time (ms)",
         y="Topic",
         orientation="h",
-        color="Avg Time (ms)",
-        color_continuous_scale="Reds",
-        title="Average Response Time by Topic"
+        title="Average Response Time by Topic",
+        color_discrete_sequence=["#C23730"]
     )
+
+    fig_time.update_traces(marker_color="#C23730", showlegend=False)
 
     fig_time.update_layout(
         height=500,
