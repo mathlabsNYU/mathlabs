@@ -109,8 +109,10 @@ def render_overview(df, evaluations):
         st.metric("Average Accuracy", f"{real_run_acc.mean():.2%}")
 
     with col4:
-        avg_time = df.groupby("run_id")["overall_avg_time_ms"].first().mean()
-        st.metric("Avg Time/Question", f"{avg_time/1000:.1f}s")
+        df_valid = df[df["time_ms"] > 0]   
+        avg_time = df_valid["time_ms"].mean()  
+        st.metric("Avg Time/Question", f"{avg_time/1000:.2f}s")
+
 
     st.markdown("---")
 
@@ -197,15 +199,23 @@ def tab_model_perf(df):
 
 
 
-
 def tab_difficulty(df):
     st.subheader("Question Difficulty Analysis")
 
     # -----------------------------
+    # 0. Filter invalid rows
+    # -----------------------------
+    # 排除：未回答（None, "", "N/A"）
+    df_valid = df[~df["correct"].isna()].copy()
+
+    # 再排除：time_ms == 0（未真正调用）
+    df_valid = df_valid[df_valid["time_ms"] > 0].copy()
+
+    # -----------------------------
     # 1. Clean difficulty categories
     # -----------------------------
-    df["difficulty_clean"] = (
-        df["final_difficulty"]
+    df_valid["difficulty_clean"] = (
+        df_valid["final_difficulty"]
         .astype(str)
         .str.strip()
         .str.lower()
@@ -213,18 +223,20 @@ def tab_difficulty(df):
     )
 
     # Drop rows where difficulty is not recognized
-    df = df.dropna(subset=["difficulty_clean"])
-
-    # Compute accuracy per question
-    qperf = (
-        df.groupby(["problem_id", "difficulty_clean"])
-        .agg({"correct": "mean"})
-        .reset_index()
-    )
-    qperf["Accuracy"] = qperf["correct"] * 100
+    df_valid = df_valid.dropna(subset=["difficulty_clean"])
 
     # -----------------------------
-    # 2. Violin plot
+    # 2. Compute accuracy per question
+    # -----------------------------
+    qperf = (
+        df_valid.groupby(["problem_id", "difficulty_clean"])
+        .agg(Accuracy=("correct", "mean"))
+        .reset_index()
+    )
+    qperf["Accuracy"] = qperf["Accuracy"] * 100
+
+    # -----------------------------
+    # 3. Violin Plot
     # -----------------------------
     import plotly.express as px
     import plotly.graph_objects as go
@@ -234,14 +246,14 @@ def tab_difficulty(df):
         x="difficulty_clean",
         y="Accuracy",
         color="difficulty_clean",
-        box=True,            # show IQR box inside violin
-        points="all",        # show individual jitter points
+        box=True,
+        points="all",
         hover_data=["problem_id"],
         color_discrete_sequence=px.colors.qualitative.Set2,
     )
 
     # -----------------------------
-    # 3. Add mean points manually
+    # 4. Add mean markers
     # -----------------------------
     mean_vals = qperf.groupby("difficulty_clean")["Accuracy"].mean()
 
@@ -256,7 +268,7 @@ def tab_difficulty(df):
     )
 
     # -----------------------------
-    # 4. Layout settings
+    # 5. Layout
     # -----------------------------
     fig.update_layout(
         title="Accuracy Distribution by Difficulty (Violin Plot)",
