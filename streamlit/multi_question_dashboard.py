@@ -59,22 +59,34 @@ def parse_evaluation_data(evaluations):
             qstats = q.get("question_stats", {})
 
             for stu in q.get("student_evaluations", []):
+
+                answer = stu.get("answer")
+                time_ms = stu.get("time_ms", 0)
+
+                # --------------------------------------------------
+                # 过滤掉：未回答 + 没输出时间（未真正参与回答）
+                # --------------------------------------------------
+                if (answer in [None, "N/A"]) and time_ms == 0:
+                    continue
+
+                # 其它情况写入 dataframe
                 rows.append(
                     {
                         "run_id": run_id,
                         "evaluated_at": ev.get("evaluated_at"),
                         "student_model": stu.get("model"),
                         "correct": stu.get("correct", False),
-                        "time_ms": stu.get("time_ms", 0),
+                        "time_ms": time_ms,
                         "problem_id": pid,
                         "final_difficulty": validation.get("final_difficulty"),
                         "original_answer": validation.get("original_answer"),
                         "final_answer": validation.get("final_answer"),
-                        "question_accuracy": qstats.get("accuracy", 0),
+                        "question_accuracy": qstats.get("accuracy", 0),  # ← 我们下面还会改
                         "overall_accuracy": summary.get("overall_accuracy"),
                         "overall_avg_time_ms": summary.get("avg_question_time_ms"),
                     }
                 )
+
 
     return pd.DataFrame(rows)
 
@@ -92,10 +104,10 @@ def render_overview(df, evaluations):
     with col2:
         st.metric("Questions Evaluated", df["problem_id"].nunique())
     with col3:
-        st.metric(
-            "Average Accuracy",
-            f"{df.groupby('run_id')['overall_accuracy'].first().mean():.1%}",
-        )
+
+        real_run_acc = df.groupby("run_id")["correct"].mean()
+        st.metric("Average Accuracy", f"{real_run_acc.mean():.2%}")
+
     with col4:
         avg_time = df.groupby("run_id")["overall_avg_time_ms"].first().mean()
         st.metric("Avg Time/Question", f"{avg_time/1000:.1f}s")
@@ -150,18 +162,23 @@ def tab_model_perf(df):
     fig = go.Figure()
 
     fig.add_trace(go.Bar(
-        x=model_perf["Accuracy"],
-        y=model_perf["model_short"],
-        orientation="h",
-        marker=dict(color="rgba(47,111,183,0.6)"),
-        error_x=dict(
-            type="data",
-            array=model_perf["ci"],
-            visible=True,
-            thickness=1.5,
-            color="black"
-        )
+    x=model_perf["Accuracy"],
+    y=model_perf["model_short"],
+    orientation="h",
+    marker=dict(color="rgba(47,111,183,0.6)"),
+    error_x=dict(
+        type="data",
+        array=model_perf["ci"],
+        visible=True,
+        thickness=1.5,
+        color="black"
+    ),
+    hovertemplate="<b>%{y}</b><br>"
+                  "Accuracy: %{x:.2f}%<br>"
+                  "95% CI: %{error_x.array:.2f}%"
+                  "<extra></extra>"
     ))
+
 
     fig.update_layout(
         height=600,
@@ -260,12 +277,19 @@ def tab_time(df):
 
     st.subheader("Model Response Time Comparison (with 95% CI)")
 
-    # 1. 清理模型名（不合并同名不同版本）
-    df["model_short"] = df["student_model"].apply(lambda x: x.split("/")[-1])
+    # --------------------------------------------
+    # 1) 过滤掉 time_ms == 0 的记录（未真正参与）
+    # --------------------------------------------
+    df_valid = df[df["time_ms"] > 0].copy()
 
-    # 2. 计算每个模型的均值、样本量、标准差
+    # 清理模型名
+    df_valid["model_short"] = df_valid["student_model"].apply(lambda x: x.split("/")[-1])
+
+    # --------------------------------------------
+    # 2) 按模型统计有效调用次数和时间
+    # --------------------------------------------
     stats = (
-        df.groupby("model_short")
+        df_valid.groupby("model_short")
         .agg(
             mean_time=("time_ms", "mean"),
             std=("time_ms", "std"),
@@ -274,13 +298,28 @@ def tab_time(df):
         .reset_index()
     )
 
-    # 3. 计算 95% 置信区间
+    # --------------------------------------------
+    # 3) 过滤规则（与你 accuracy tab 完全一致风格）
+    # 至少被调用 2 次且 mean_time > 0
+    # --------------------------------------------
+    stats = stats[(stats["n"] >= 2) & (stats["mean_time"] > 0)]
+
+    # 如果完全没有模型满足要求，给提示
+    if stats.empty:
+        st.info("No model has at least 2 valid latency measurements.")
+        return
+
+    # --------------------------------------------
+    # 4) 计算 95% CI
+    # --------------------------------------------
     stats["ci95"] = 1.96 * stats["std"] / np.sqrt(stats["n"])
 
-    # 4. 排序（从慢到快或快到慢都行，这里从快到慢）
+    # 排序
     stats = stats.sort_values("mean_time", ascending=True)
 
-    # 5. 画图
+    # --------------------------------------------
+    # 5) 画图
+    # --------------------------------------------
     fig = go.Figure()
 
     fig.add_trace(
@@ -293,20 +332,22 @@ def tab_time(df):
                 array=stats["ci95"],
                 visible=True
             ),
-            marker=dict(
-                color="rgba(47,111,183,0.6)"
-            ),
+            marker=dict(color="rgba(47,111,183,0.6)")
         )
     )
 
+    # --------------------------------------------
+    # 6) overall latency based on valid calls only
+    # --------------------------------------------
+    overall_mean = df_valid["time_ms"].mean()
 
     fig.add_vline(
-    x=df["time_ms"].mean(),
-    line_width=2,
-    line_dash="dash",
-    line_color="red",
-    annotation_text="Overall Avg",
-    annotation_position="top"
+        x=overall_mean,
+        line_width=2,
+        line_dash="dash",
+        line_color="red",
+        annotation_text="Overall Avg",
+        annotation_position="top"
     )
 
     fig.update_layout(
@@ -318,6 +359,9 @@ def tab_time(df):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+    
+
+    
 
 
 
@@ -513,7 +557,7 @@ def tab_details(evaluations, df):
             "Final Answer": validation.get("final_answer", "N/A"),
             "Original Difficulty": validation.get("original_difficulty", "N/A"),
             "Final Difficulty": validation.get("final_difficulty", "N/A"),
-            "Accuracy": f"{stats.get('accuracy', 0):.1%}",
+            "Accuracy": f"{(df[df['problem_id'] == pid]['correct'].mean()):.2%}",
             "Avg Time (ms)": stats.get("avg_time_ms", 0),
             "Student Results": pd.DataFrame(student_results)
         })
@@ -550,6 +594,66 @@ def tab_details(evaluations, df):
     if st.checkbox("Show Parsed DataFrame"):
         st.dataframe(df, use_container_width=True)
 
+
+def compute_model_statistics(evaluations):
+    """
+    Produce a table counting for each model:
+    - total questions attempted
+    - valid answers (answered with time > 0)
+    - skipped answers (quota errors, invalid endpoints, time == 0)
+    - correct answers (valid + correct)
+    - incorrect answers
+    """
+
+    stats = {}
+
+    for ev in evaluations:
+        for q in ev.get("questions", []):
+            for stu in q.get("student_evaluations", []):
+                
+                model = stu.get("model")
+                answer = stu.get("answer")
+                time_ms = stu.get("time_ms", 0)
+                correct = stu.get("correct", False)
+
+                if model not in stats:
+                    stats[model] = {
+                        "total_attempts": 0,
+                        "valid_attempts": 0,
+                        "skipped_attempts": 0,
+                        "correct": 0,
+                        "incorrect": 0,
+                    }
+
+                stats[model]["total_attempts"] += 1
+
+                # skipped definitions
+                if (answer in [None, "N/A"]) and time_ms == 0:
+                    stats[model]["skipped_attempts"] += 1
+                    continue
+
+                # valid answer
+                stats[model]["valid_attempts"] += 1
+                if correct:
+                    stats[model]["correct"] += 1
+                else:
+                    stats[model]["incorrect"] += 1
+
+    import pandas as pd
+    df_stats = pd.DataFrame([
+        {
+            "Model": m,
+            "Total Attempts": v["total_attempts"],
+            "Valid Answers": v["valid_attempts"],
+            "Skipped (Quota/Error)": v["skipped_attempts"],
+            "Correct": v["correct"],
+            "Incorrect": v["incorrect"],
+            "Accuracy (Valid Only)": (v["correct"] / v["valid_attempts"]) if v["valid_attempts"] > 0 else 0
+        }
+        for m, v in stats.items()
+    ])
+
+    return df_stats.sort_values("Accuracy (Valid Only)", ascending=False)
 
 
 # -------------------------------------------------------------
@@ -595,6 +699,16 @@ def main():
         tab_topic(df, questions)
     with tab5:
         tab_details(evaluations, df)
+
+    st.subheader("Model Invocation Summary (Across All Runs)")
+
+    model_stats = compute_model_statistics(evaluations)
+
+    model_stats_display = model_stats.copy()
+    model_stats_display["Accuracy (Valid Only)"] = model_stats_display["Accuracy (Valid Only)"].map(lambda x: f"{x:.2%}")
+
+    st.dataframe(model_stats_display, use_container_width=True)
+
 
 
 if __name__ == "__main__":
