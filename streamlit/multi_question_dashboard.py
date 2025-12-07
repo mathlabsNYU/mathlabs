@@ -451,7 +451,8 @@ def tab_topic(df, questions):
         color_discrete_sequence=["#4C78A8"]
     )
 
-    fig_acc.update_traces(marker_color="#4C78A8", showlegend=False)
+    fig_acc.update_traces(marker_color="#4C78A8", showlegend=False,
+    hovertemplate='<b>%{y}</b><br>Accuracy: %{x:.2f}%<extra></extra>')
 
 
     fig_acc.update_layout(
@@ -473,7 +474,8 @@ def tab_topic(df, questions):
         color_discrete_sequence=["#C23730"]
     )
 
-    fig_time.update_traces(marker_color="#C23730", showlegend=False)
+    fig_time.update_traces(marker_color="#C23730", showlegend=False,
+    hovertemplate='<b>%{y}</b><br>Avg Time: %{x:.2f}ms<extra></extra>')
 
     fig_time.update_layout(
         height=500,
@@ -552,26 +554,63 @@ def tab_details(evaluations, df):
         validation = q_eval.get("validation", {})
         stats = q_eval.get("question_stats", {})
 
-        # Collect student model outputs
-        student_results = []
-        for se in q_eval.get("student_evaluations", []):
-            student_results.append({
-                "Model": se.get("model", "unknown"),
-                "Answer": se.get("answer", "N/A"),
-                "Correct": "✓" if se.get("correct") else "✗",
-                "Time (ms)": se.get("time_ms", 0)
+        # -------------------------------
+        # Parse student evaluation
+        # -------------------------------
+        student_evals = q_eval.get("student_evaluations", [])
+
+        student_rows = []
+        valid_answers = []   # answers with actual response
+        valid_times = []     # time > 0 only
+
+        for se in student_evals:
+            model = se.get("model")
+            answer = se.get("answer")
+            correct_flag = se.get("correct", False)
+            time_ms = se.get("time_ms", 0)
+
+            # Build table row
+            student_rows.append({
+                "Model": model,
+                "Answer": answer if answer not in [None, "", "N/A"] else "N/A",
+                "Correct": "✓" if correct_flag else "✗",
+                "Time (ms)": time_ms,
             })
 
-        # Store full record
+            # Only count valid answers (answer exists)
+            if answer not in [None, "", "N/A"]:
+                valid_answers.append(correct_flag)
+
+                # Only count meaningful time
+                if time_ms and time_ms > 0:
+                    valid_times.append(time_ms)
+
+        # -------------------------------
+        # Correct per-question accuracy
+        # -------------------------------
+        if len(valid_answers) > 0:
+            accuracy = sum(valid_answers) / len(valid_answers)
+        else:
+            accuracy = 0.0
+
+        # -------------------------------
+        # Correct per-question avg time
+        # -------------------------------
+        if len(valid_times) > 0:
+            avg_time = sum(valid_times) / len(valid_times)
+        else:
+            avg_time = 0
+
+        # Store full structured data
         questions_data.append({
             "Problem ID": pid,
             "Original Answer": validation.get("original_answer", "N/A"),
             "Final Answer": validation.get("final_answer", "N/A"),
             "Original Difficulty": validation.get("original_difficulty", "N/A"),
             "Final Difficulty": validation.get("final_difficulty", "N/A"),
-            "Accuracy": f"{(df[df['problem_id'] == pid]['correct'].mean()):.2%}",
-            "Avg Time (ms)": stats.get("avg_time_ms", 0),
-            "Student Results": pd.DataFrame(student_results)
+            "Accuracy": f"{accuracy * 100:.2f}%",
+            "Avg Time (ms)": int(avg_time),
+            "Student Results": pd.DataFrame(student_rows)
         })
 
     # -----------------------
