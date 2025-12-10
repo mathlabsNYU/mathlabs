@@ -1,6 +1,6 @@
-# 🧮 MathLABS: Visual and Symbolic Mathematical Reasoning Dataset
+# 🧮 MathLABS: Visual Mathematical Reasoning Dataset
 
-MathLABS is a collaborative dataset project exploring **visual mathematical reasoning** and **symbolic problem solving** in modern LLMs and VLMs.  
+MathLABS is a collaborative dataset project exploring **visual mathematical reasoning** in modern LLMs and VLMs.  
 The goal is to benchmark model reasoning on **small-data visual math problems** with structured, schema-aligned questions.
 
 ---
@@ -9,24 +9,24 @@ The goal is to benchmark model reasoning on **small-data visual math problems** 
 ```
 mathlabs/
 │
-├── dataset/ # Phase 1: All questions (baseline + validated)
-│ ├── baseline.json #Intial pool
-│ ├── unified.json #Combination of all extracted and generated
-│ ├── verified.json #Verified and validated questions
-│ └── images/
+├── dataset/
+│ ├── baseline.json #Intial pool of Questions
+│ └── images/ #Intial Images in baseline.json
+│ └── extractor.py
+│ └── generator.py
 │
-├── model_eval/ # Phase 2: Model experiments & evaluation
-│ ├── prompts/ 
-│ ├── results/
-│ ├── metrics/
-│ └── analysis/
+├── model_eval/
+│ ├── prompts.md 
+│ ├── evaluator.py # automated evaluator
+│ ├── sample_evaluations.json
+├── streamlit/ # Dashboard
+│ ├──pages/ # Code for each of the streamlit pages
 │
 ├── docs/
 │ ├── schema_description.md
 │ ├── design_notes.md
 │ └── roadmap.md
-│
-└── meta_data.json
+
 ```
 
 
@@ -57,6 +57,11 @@ Use validated dataset to benchmark LLMs or other models:
 | **Visualization** | Graphs and summary analysis | `model_eval/analysis/` |
 
 ---
+
+### **Phase 3: Scaling & Dashboard**
+
+We set up the database on  MongoDB. Additionally all the images required for generating new questions or that were extracted from books were uploaded to HuggingFace
+
 
 ## Research Focus
 - Reasoning with **small-data**  
@@ -141,4 +146,6 @@ Use validated dataset to benchmark LLMs or other models:
 }
 
 ```
+
+
 Team: MathLABS -> (L)ucas Yao, (A)khilesh Vangala, (B)ruce Zhang, (S)ahil Parupudi; NYU | CDS
