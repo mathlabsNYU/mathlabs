@@ -59,6 +59,10 @@ def parse_evaluation_data(evaluations):
             qstats = q.get("question_stats", {})
 
             for stu in q.get("student_evaluations", []):
+                # skip nemotron-nano-12b-v2-vl:free
+                if stu.get("model") == "nvidia/nemotron-nano-12b-v2-vl:free":
+                    continue
+
 
                 answer = stu.get("answer")
                 time_ms = stu.get("time_ms", 0)
