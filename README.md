@@ -1,4 +1,4 @@
-# 🧮 MathLABS: Visual Mathematical Reasoning Dataset
+# 🧮 [MathLABS: Visual Mathematical Reasoning Dataset](https://mathlabs.streamlit.app/)
 
 MathLABS is a collaborative dataset project exploring **visual mathematical reasoning** in modern LLMs and VLMs.  
 The goal is to benchmark model reasoning on **small-data visual math problems** with structured, schema-aligned questions.
